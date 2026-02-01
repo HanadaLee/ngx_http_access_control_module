@@ -9,12 +9,14 @@
 #include <ngx_http.h>
 
 
-#define NGX_HTTP_ACCESS_CONTROL_RULE_ALLOW   0
-#define NGX_HTTP_ACCESS_CONTROL_RULE_DENY    1
+#define NGX_HTTP_ACCESS_CONTROL_RULE_ALLOW           0
+#define NGX_HTTP_ACCESS_CONTROL_RULE_DENY            1
 
-#define NGX_HTTP_ACCESS_INHERIT_OFF          0
-#define NGX_HTTP_ACCESS_INHERIT_BEFORE       1
-#define NGX_HTTP_ACCESS_INHERIT_AFTER        2
+
+#define NGX_HTTP_ACCESS_CONTROL_INHERIT_ON           0
+#define NGX_HTTP_ACCESS_CONTROL_INHERIT_OFF          1
+#define NGX_HTTP_ACCESS_CONTROL_INHERIT_BEFORE       2
+#define NGX_HTTP_ACCESS_CONTROL_INHERIT_AFTER        3
 
 
 typedef struct {
@@ -34,11 +36,18 @@ static ngx_int_t ngx_http_access_control_handler(ngx_http_request_t *r);
 static void *ngx_http_access_control_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
-static char *ngx_http_access_control(ngx_conf_t *cf,
-    ngx_command_t *cmd, void *conf);
-static char *ngx_http_access_control_set_inherit(ngx_conf_t *cf,
-    ngx_command_t *cmd, void *conf);
+static char *ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd,
+    void *conf);
 static ngx_int_t ngx_http_access_control_init(ngx_conf_t *cf);
+
+
+static ngx_conf_enum_t  ngx_http_access_control_inherit[] = {
+    { ngx_string("on"), ngx_http_access_control_INHERIT_ON },
+    { ngx_string("off"), ngx_http_access_control_INHERIT_OFF },
+    { ngx_string("before"), ngx_http_access_control_INHERIT_BEFORE },
+    { ngx_string("after"), ngx_http_access_control_INHERIT_AFTER },
+    { ngx_null_string, 0 }
+};
 
 
 static ngx_command_t ngx_http_access_control_commands[] = {
@@ -48,14 +57,14 @@ static ngx_command_t ngx_http_access_control_commands[] = {
                         |NGX_CONF_TAKE2,
       ngx_http_access_control,
       NGX_HTTP_LOC_CONF_OFFSET,
-      0,
-      NULL },
+      0, NULL },
 
     { ngx_string("access_rules_inherit"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_http_access_control_set_inherit,
+      ngx_conf_set_enum_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
-      0, NULL },
+      offsetof(ngx_http_access_control_loc_conf_t, inherit),
+      &ngx_http_access_control_inherit },
 
     { ngx_string("access_deny_status"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
@@ -165,89 +174,80 @@ ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     ngx_http_access_control_loc_conf_t *conf = child;
 
     ngx_array_t                        *new_rules;
-    ngx_http_access_control_rule_t     *p_rule;
-    ngx_http_access_control_rule_t     *c_rule;
-    ngx_http_access_control_rule_t     *nr;
+    ngx_http_access_control_rule_t     *pr, *cr, *nr;
     ngx_uint_t                          i;
 
-    ngx_conf_merge_uint_value(conf->inherit_mode, prev->inherit_mode,
-                              NGX_HTTP_ACCESS_INHERIT_OFF);
+    ngx_conf_merge_uint_value(conf->inherit_mode, prev->inherit,
+                              NGX_HTTP_ACCESS_CONTROL_INHERIT_ON);
 
     ngx_conf_merge_uint_value(conf->status_code, prev->status_code,
                               NGX_HTTP_FORBIDDEN);
 
-    if (conf->rules == NULL) {
-        conf->rules = prev->rules;
-
-    } else {
-        if (prev->rules) {
-            switch (conf->inherit_mode) {
-
-            case NGX_HTTP_ACCESS_INHERIT_BEFORE:
-                new_rules = ngx_array_create(cf->pool,
-                    prev->rules->nelts + conf->rules->nelts,
-                    sizeof(ngx_http_access_control_rule_t));
-                if (new_rules == NULL) {
-                    return NGX_CONF_ERROR;
-                }
-
-                p_rule = prev->rules->elts;
-                for (i = 0; i < prev->rules->nelts; i++) {
-                    nr = ngx_array_push(new_rules);
-                    if (nr == NULL) {
-                        return NGX_CONF_ERROR;
-                    }
-                    *nr = p_rule[i];
-                }
-
-                c_rule = conf->rules->elts;
-                for (ngx_uint_t i = 0; i < conf->rules->nelts; i++) {
-                    nr = ngx_array_push(new_rules);
-                    if (nr == NULL) {
-                        return NGX_CONF_ERROR;
-                    }
-                    *nr = c_rule[i];
-                }
-
-                conf->rules = new_rules;
-                break;
-
-            case NGX_HTTP_ACCESS_INHERIT_AFTER:
-                new_rules = ngx_array_create(cf->pool,
-                    prev->rules->nelts + conf->rules->nelts,
-                    sizeof(ngx_http_access_control_rule_t));
-                if (new_rules == NULL) {
-                    return NGX_CONF_ERROR;
-                }
-
-                c_rule = conf->rules->elts;
-                for (ngx_uint_t i = 0; i < conf->rules->nelts; i++) {
-                    nr = ngx_array_push(new_rules);
-                    if (nr == NULL) {
-                        return NGX_CONF_ERROR;
-                    }
-                    *nr = c_rule[i];
-                }
-
-                p_rule = prev->rules->elts;
-                for (i = 0; i < prev->rules->nelts; i++) {
-                    nr = ngx_array_push(new_rules);
-                    if (nr == NULL) {
-                        return NGX_CONF_ERROR;
-                    }
-                    *nr = p_rule[i];
-                }
-
-                conf->rules = new_rules;
-                break;
-
-            /* NGX_CONF_UNSET_UINT */
-            /* NGX_HTTP_ACCESS_INHERIT_OFF */
-            default: 
-                break;
-            }
+    if (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_OFF) {
+        if (conf->rules == NGX_CONF_UNSET_PTR) {
+            conf->rules = NULL;
         }
+
+        return NGX_CONF_OK;
     }
+
+    if (conf->rules == NGX_CONF_UNSET_PTR) {
+        conf->rules = (prev->rules == NGX_CONF_UNSET_PTR) ? NULL : prev->rules;
+        return NGX_CONF_OK;
+    }
+
+    if (prev->rules == NGX_CONF_UNSET_PTR || prev->rules == NULL) {
+        return NGX_CONF_OK;
+    }
+
+    if (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_ON) {
+        return NGX_CONF_OK;
+    }
+
+    if (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_AFTER) {
+        pr = prev->rules->elts;
+        for (i = 0; i < prev->rules->nelts; i++) {
+            cr = ngx_array_push(conf->rules);
+            if (cr == NULL) {
+                return NGX_CONF_ERROR;
+            }
+
+            *cr = pr[i];
+        }
+
+        return NGX_CONF_OK;
+    }
+
+    /* NGX_HTTP_ACCESS_CONTROL_INHERIT_BEFORE */
+    new_rules = ngx_array_create(cf->pool,
+        prev->rules->nelts + conf->rules->nelts,
+        sizeof(ngx_http_access_control_rule_t));
+
+    if (new_rules == NULL) {
+        return NGX_CONF_ERROR;
+    }
+
+    pr = prev->rules->elts;
+    for (i = 0; i < prev->rules->nelts; i++) {
+        nr = ngx_array_push(new_rules);
+        if (nr == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        *nr = pr[i];
+    }
+
+    cr = conf->rules->elts;
+    for (i = 0; i < conf->rules->nelts; i++) {
+        nr = ngx_array_push(new_rules);
+        if (nr == NULL) {
+            return NGX_CONF_ERROR;
+        }
+
+        *nr = cr[i];
+    }
+
+    conf->rules = new_rules;
 
     return NGX_CONF_OK;
 }
@@ -308,35 +308,6 @@ ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     }
 
     rule->condition = cv;
-
-    return NGX_CONF_OK;
-}
-
-
-static char *
-ngx_http_access_control_set_inherit(ngx_conf_t *cf, 
-    ngx_command_t *cmd, void *conf)
-{
-    ngx_http_access_control_loc_conf_t *alcf = conf;
-    ngx_str_t                          *value;
-
-    value = cf->args->elts;
-
-    if (ngx_strcmp(value[1].data, "off") == 0) {
-        alcf->inherit_mode = NGX_HTTP_ACCESS_INHERIT_OFF;
-
-    } else if (ngx_strcmp(value[1].data, "before") == 0) {
-        alcf->inherit_mode = NGX_HTTP_ACCESS_INHERIT_BEFORE;
-
-    } else if (ngx_strcmp(value[1].data, "after") == 0) {
-        alcf->inherit_mode = NGX_HTTP_ACCESS_INHERIT_AFTER;
-
-    } else {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-            "invalid value \"%V\" in \"access_rules_inherit\" directive, "
-            "must be \"off\", \"before\" or \"after\"", &value[1]);
-        return NGX_CONF_ERROR;
-    }
 
     return NGX_CONF_OK;
 }

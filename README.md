@@ -6,15 +6,18 @@ A custom Nginx module for advanced access control based on variables.
 
 # Table of Content
 
-* [Name](#name)
-* [Status](#status)
-* [Synopsis](#synopsis)
-* [Installation](#installation)
-* [Directives](#directives)
-  * [access](#access)
-  * [access_deny_status](#access_deny_status)
-* [Author](#author)
-* [License](#license)
+- [ngx\_http\_access\_control\_module](#ngx_http_access_control_module)
+- [Name](#name)
+- [Table of Content](#table-of-content)
+- [Status](#status)
+- [Synopsis](#synopsis)
+- [Installation](#installation)
+- [Directives](#directives)
+  - [access](#access)
+  - [access\_rules\_inherit](#access_rules_inherit)
+  - [access\_deny\_status](#access_deny_status)
+- [Author](#author)
+- [License](#license)
 
 # Status
 
@@ -63,23 +66,24 @@ To use theses modules, configure your nginx branch with `--add-module=/path/to/n
 
 The access directive defines an access control rule based on a variable. The variable is evaluated at runtime, and if it is non-empty and not zero, the rule is considered matched.
 
-allow: Allows access if the condition is met. The allowed request will no longer match the remaining access control rules.
-deny: Denies access if the condition is met.
-
+The `allow` parameter allows access if the condition is met. The allowed request will no longer match the remaining access control rules.
+The `deny`  parameter denies access if the condition is met.
 
 ## access_rules_inherit
 
-**Syntax:** *access_rules_inherit off | before | after;*
+**Syntax:** *access_rules_inherit on | off | before | after;*
 
-**Default:** *access_rules_inherit off;*
+**Default:** *access_rules_inherit on;*
 
 **Context:** *http, server, location*
 
-determines whether and how access control rules from previous level are applied in the current configuration context. It accepts three values:
+Allows altering inheritance rules for the values specified in the `access` directive. By default, the standard inheritance model is used.
 
-off: do not inherit any access rules from previous level, unless no access directive is defined at the current level.
-before: apply access rules of previous level before the access rules of current level.
-after: apply access rules of previous level after the access rules of current level.
+The `before` parameter specifies that the rules inherited from the previous configuration level will be applied before the rules specified in the current location block.
+
+the `after` parameter specifies that the rules inherited from the previous configuration level will be applied after the rules specified in the current location block.
+
+The `off` parameter cancels inheritance of the values from the previous configuration level.
 
 ## access_deny_status
 
