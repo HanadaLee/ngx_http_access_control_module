@@ -183,20 +183,14 @@ ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     ngx_conf_merge_uint_value(conf->status_code, prev->status_code,
                               NGX_HTTP_FORBIDDEN);
 
-    if (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_OFF) {
-        if (conf->rules == NGX_CONF_UNSET_PTR) {
-            conf->rules = NULL;
-        }
-
+    if (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_OFF
+        || prev->rules == NULL)
+    {
         return NGX_CONF_OK;
     }
 
-    if (conf->rules == NGX_CONF_UNSET_PTR) {
-        conf->rules = (prev->rules == NGX_CONF_UNSET_PTR) ? NULL : prev->rules;
-        return NGX_CONF_OK;
-    }
-
-    if (prev->rules == NGX_CONF_UNSET_PTR || prev->rules == NULL) {
+    if (conf->rules == NULL) {
+        conf->rules = prev->rules;
         return NGX_CONF_OK;
     }
 
@@ -264,12 +258,6 @@ ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     value = cf->args->elts;
 
-    if (cf->args->nelts < 3) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-            "invalid number of arguments in \"access\" directive");
-        return NGX_CONF_ERROR;
-    }
-
     if (alcf->rules == NULL) {
         alcf->rules = ngx_array_create(cf->pool, 4,
             sizeof(ngx_http_access_control_rule_t));
@@ -285,11 +273,13 @@ ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     if (ngx_strcmp(value[1].data, "allow") == 0) {
         rule->action = NGX_HTTP_ACCESS_CONTROL_RULE_ALLOW;
+
     } else if (ngx_strcmp(value[1].data, "deny") == 0) {
         rule->action = NGX_HTTP_ACCESS_CONTROL_RULE_DENY;
+
     } else {
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-            "invalid action \"%V\" in \"access\" directive", &value[1]);
+            "invalid parameter \"%V\"", &value[1]);
         return NGX_CONF_ERROR;
     }
 
