@@ -42,10 +42,10 @@ static ngx_int_t ngx_http_access_control_init(ngx_conf_t *cf);
 
 
 static ngx_conf_enum_t  ngx_http_access_control_inherit[] = {
-    { ngx_string("on"), ngx_http_access_control_INHERIT_ON },
-    { ngx_string("off"), ngx_http_access_control_INHERIT_OFF },
-    { ngx_string("before"), ngx_http_access_control_INHERIT_BEFORE },
-    { ngx_string("after"), ngx_http_access_control_INHERIT_AFTER },
+    { ngx_string("on"), NGX_HTTP_ACCESS_CONTROL_INHERIT_ON },
+    { ngx_string("off"), NGX_HTTP_ACCESS_CONTROL_INHERIT_OFF },
+    { ngx_string("before"), NGX_HTTP_ACCESS_CONTROL_INHERIT_BEFORE },
+    { ngx_string("after"), NGX_HTTP_ACCESS_CONTROL_INHERIT_AFTER },
     { ngx_null_string, 0 }
 };
 
@@ -177,7 +177,7 @@ ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     ngx_http_access_control_rule_t     *pr, *cr, *nr;
     ngx_uint_t                          i;
 
-    ngx_conf_merge_uint_value(conf->inherit_mode, prev->inherit,
+    ngx_conf_merge_uint_value(conf->inherit_mode, prev->inherit_mode,
                               NGX_HTTP_ACCESS_CONTROL_INHERIT_ON);
 
     ngx_conf_merge_uint_value(conf->status_code, prev->status_code,
