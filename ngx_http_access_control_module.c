@@ -59,7 +59,7 @@ static ngx_command_t ngx_http_access_control_commands[] = {
       NGX_HTTP_LOC_CONF_OFFSET,
       0, NULL },
 
-    { ngx_string("access_rules_inherit"),
+    { ngx_string("access_inherit"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
       ngx_conf_set_enum_slot,
       NGX_HTTP_LOC_CONF_OFFSET,
