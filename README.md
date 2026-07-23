@@ -14,7 +14,7 @@ A custom Nginx module for advanced access control based on variables.
 - [Installation](#installation)
 - [Directives](#directives)
   - [access](#access)
-  - [access\_rules\_inherit](#access_rules_inherit)
+  - [access\_inherit](#access_inherit)
   - [access\_deny\_status](#access_deny_status)
 - [Author](#author)
 - [License](#license)
@@ -30,11 +30,14 @@ server {
     listen 80;
     server_name example.com;
 
-    # Allow access if $var2 is non-empty and not zero. The allowed request will no longer match the remaining access control rules.
+    # Allow access if $var1 is non-empty and not zero. The allowed request will no longer match the remaining access control rules.
     access allow $var1;
 
-    # Deny access if $var1 is non-empty and not zero
+    # Deny access if $var2 is non-empty and not zero
     access deny $var2;
+
+    # Unconditional deny
+    access deny;
 
     location / {
         # Your other configurations
@@ -46,6 +49,11 @@ server {
 
         # Deny access if $var3 is non-empty and not zero
         access deny $var3;
+
+        # Deny access conditionally with a when block
+        when ($remote_addr ~ "192\.168\.") {
+            access deny;
+        }
     }
 }
 ```
@@ -54,34 +62,41 @@ server {
 
 To use theses modules, configure your nginx branch with `--add-module=/path/to/ngx_http_access_control_module`.
 
+if [ngx_condition_module](https://git.hanada.info/hanada/ngx_condition_module) is used, the module will use the `ngx_condition_module`'s condition evaluation logic.
+
 # Directives
 
 ## access
 
-**Syntax:** *access [allow|deny] variable;*
+**Syntax:** *access allow | deny [variable];*
 
 **Default:** *-*
 
-**Context:** *http, server, location*
+**Context:** *http, server, location, http when, server when, location when*
 
 The access directive defines an access control rule based on a variable. The variable is evaluated at runtime, and if it is non-empty and not zero, the rule is considered matched.
 
 The `allow` parameter allows access if the condition is met. The allowed request will no longer match the remaining access control rules.
 The `deny`  parameter denies access if the condition is met.
 
-## access_rules_inherit
+if variable is not defined, the rule is always considered matched.
+```nginx
+access deny;
+```
 
-**Syntax:** *access_rules_inherit on | off | before | after;*
+## access_inherit
 
-**Default:** *access_rules_inherit on;*
+**Syntax:** *access_inherit on | off | before | after;*
+
+**Default:** *access_inherit on;*
 
 **Context:** *http, server, location*
 
 Allows altering inheritance rules for the values specified in the `access` directive. By default, the standard inheritance model is used.
 
-The `before` parameter specifies that the rules inherited from the previous configuration level will be applied before the rules specified in the current location block.
+The `before` parameter specifies that the rules inherited from the previous configuration level will be applied before the rules specified in the current block.
 
-the `after` parameter specifies that the rules inherited from the previous configuration level will be applied after the rules specified in the current location block.
+the `after` parameter specifies that the rules inherited from the previous configuration level will be applied after the rules specified in the current block.
 
 The `off` parameter cancels inheritance of the values from the previous configuration level.
 
@@ -91,7 +106,7 @@ The `off` parameter cancels inheritance of the values from the previous configur
 
 **Default:** *access_deny_status 403;*
 
-**Context:** *http, server, location*
+**Context:** *http, server, location, http when, server when, location when*
 
 Sets the HTTP status code to return in response when access is denied by a deny rule.
 
