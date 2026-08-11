@@ -315,7 +315,7 @@ ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     if (alcf->rules == NULL) {
         alcf->rules = ngx_array_create(cf->pool, 4,
-            sizeof(ngx_http_access_control_rule_t));
+                                       sizeof(ngx_http_access_control_rule_t));
         if (alcf->rules == NULL) {
             return NGX_CONF_ERROR;
         }
@@ -336,7 +336,7 @@ ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
 
     } else {
         ngx_conf_log_error(NGX_LOG_EMERG, cf, 0,
-            "invalid parameter \"%V\"", &value[1]);
+                           "invalid parameter \"%V\"", &value[1]);
         return NGX_CONF_ERROR;
     }
 
