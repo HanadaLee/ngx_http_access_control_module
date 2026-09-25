@@ -18,7 +18,7 @@ use Test::Nginx;
 select STDERR; $| = 1;
 select STDOUT; $| = 1;
 
-my $t = Test::Nginx->new()->has(qw/http rewrite ngx_condition_module
+my $t = Test::Nginx->new()->has(qw/http rewrite ngx_expr_module
 	ngx_http_access_control_module/)->plan(12);
 
 $t->write_file_expand('nginx.conf', <<'EOF');
@@ -37,8 +37,8 @@ http {
         listen       127.0.0.1:8080;
         server_name  localhost;
 
-        condition blocked str_eq $arg_block yes;
-        condition teapot str_eq $arg_status teapot;
+        expr blocked str_eq $arg_block yes;
+        expr teapot str_eq $arg_status teapot;
 
         location = /basic {
             access allow $arg_allow;

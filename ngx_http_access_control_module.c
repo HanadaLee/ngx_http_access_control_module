@@ -8,8 +8,8 @@
 #include <ngx_core.h>
 #include <ngx_http.h>
 
-#if (NGX_CONDITION)
-#include <ngx_http_condition_module.h>
+#if (NGX_EXPR)
+#include <ngx_http_expr_module.h>
 #endif
 
 
@@ -26,15 +26,15 @@
 typedef struct {
     ngx_uint_t                  action;
     ngx_http_complex_value_t   *condition;
-#if (NGX_CONDITION)
-    ngx_condition_expr_id_t     expr_id;
+#if (NGX_EXPR)
+    ngx_expr_when_id_t          expr_id;
 #endif
 } ngx_http_access_control_rule_t;
 
 
 typedef struct {
     ngx_array_t                *rules;
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
     ngx_array_t                *status_code;
 #else
     ngx_uint_t                  status_code;
@@ -65,7 +65,7 @@ static ngx_command_t ngx_http_access_control_commands[] = {
 
     { ngx_string("access"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_HTTP_LMT_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
@@ -83,12 +83,12 @@ static ngx_command_t ngx_http_access_control_commands[] = {
 
     { ngx_string("access_deny_status"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
                         |NGX_HTTP_MAIN_WHEN_CONF|NGX_HTTP_SRV_WHEN_CONF
                         |NGX_HTTP_LOC_WHEN_CONF
 #endif
                         |NGX_CONF_TAKE1,
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
       ngx_conf_set_conditional_num_slot,
 #else
       ngx_conf_set_num_slot,
@@ -139,7 +139,7 @@ ngx_http_access_control_handler(ngx_http_request_t *r)
     ngx_uint_t                          i;
     ngx_http_access_control_rule_t     *rules;
     ngx_str_t                           result;
-#if (NGX_CONDITION)
+#if (NGX_EXPR)
     ngx_int_t                           status;
 #endif
 
@@ -154,9 +154,8 @@ ngx_http_access_control_handler(ngx_http_request_t *r)
     for (i = 0; i < alcf->rules->nelts; i++) {
         ngx_http_access_control_rule_t *rule = &rules[i];
 
-#if (NGX_CONDITION)
-        if (ngx_http_condition_get_expr_result(r, rule->expr_id)
-            != NGX_CONDITION_EXPR_HIT)
+#if (NGX_EXPR)
+        if (ngx_http_expr_get_result(r, rule->expr_id) != NGX_EXPR_WHEN_HIT)
         {
             continue;
         }
@@ -176,8 +175,8 @@ ngx_http_access_control_handler(ngx_http_request_t *r)
             ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
                           "access denied by access_control rules");
 
-#if (NGX_CONDITION)
-            status = ngx_http_get_conditional_num_value(r, alcf->status_code);
+#if (NGX_EXPR)
+            status = ngx_http_get_expr_num_value(r, alcf->status_code);
             return (ngx_uint_t) status;
 #else
             return alcf->status_code;
@@ -203,7 +202,7 @@ ngx_http_access_control_create_loc_conf(ngx_conf_t *cf)
     }
 
     conf->inherit_mode = NGX_CONF_UNSET_UINT;
-#if !(NGX_CONDITION)
+#if !(NGX_EXPR)
     conf->status_code = NGX_CONF_UNSET_UINT;
 #endif
 
@@ -225,10 +224,10 @@ ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     ngx_conf_merge_uint_value(conf->inherit_mode, prev->inherit_mode,
                               NGX_HTTP_ACCESS_CONTROL_INHERIT_ON);
 
-#if (NGX_CONDITION)
-    if (ngx_conf_merge_conditional_num_value(cf, &conf->status_code,
-                                             prev->status_code,
-                                             NGX_HTTP_FORBIDDEN)
+#if (NGX_EXPR)
+    if (ngx_conf_merge_expr_num_value(cf, &conf->status_code,
+                                      prev->status_code,
+                                      NGX_HTTP_FORBIDDEN)
         != NGX_OK)
     {
         return NGX_CONF_ERROR;
@@ -340,8 +339,8 @@ ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
         return NGX_CONF_ERROR;
     }
 
-#if (NGX_CONDITION)
-    rule->expr_id = ngx_condition_get_associated_expr_id(cf);
+#if (NGX_EXPR)
+    rule->expr_id = ngx_expr_get_associated_when_id(cf);
 #endif
 
     if (cf->args->nelts == 3) {

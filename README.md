@@ -62,7 +62,7 @@ server {
 
 To use theses modules, configure your nginx branch with `--add-module=/path/to/ngx_http_access_control_module`.
 
-if [ngx_condition_module](https://git.hanada.info/hanada/ngx_condition_module) is used, the module will use the `ngx_condition_module`'s condition evaluation logic.
+if [ngx_expr_module](https://git.hanada.info/hanada/ngx_condition_module) is used, the module will use the `ngx_expr_module`'s condition evaluation logic.
 
 # Directives
 
