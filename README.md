@@ -92,11 +92,20 @@ access deny;
 
 **Context:** *http, server, location*
 
-Allows altering inheritance rules for the values specified in the `access` directive. By default, the standard inheritance model is used.
+Controls inheritance of `access` rules. With `on`, the previous configuration
+level is used when no local rules are defined or, with `ngx_expr_module`, all
+local `when` conditions are false. An unconditional rule or a matching `when`
+selects the local group, even if its variable parameter is empty or exactly
+`0`. A false variable parameter skips that rule; it does not cause `on` to
+fall back to the parent.
 
-The `before` parameter specifies that the rules inherited from the previous configuration level will be applied before the rules specified in the current block.
+The `before` parameter evaluates the parent's effective rules before the local
+rules. The `after` parameter evaluates them after the local rules if no local
+allow or deny matches. Each parent retains its own inheritance mode.
 
-the `after` parameter specifies that the rules inherited from the previous configuration level will be applied after the rules specified in the current block.
+The first matching allow or deny ends this module's evaluation. An allow does
+not bypass other access-control modules. Inherited conditions are evaluated
+using the current configuration's expression definitions.
 
 The `off` parameter cancels inheritance of the values from the previous configuration level.
 
@@ -109,6 +118,7 @@ The `off` parameter cancels inheritance of the values from the previous configur
 **Context:** *http, server, location, http when, server when, location when*
 
 Sets the HTTP status code to return in response when access is denied by a deny rule.
+The current location's setting also applies when the matching deny rule is inherited.
 
 # Author
 

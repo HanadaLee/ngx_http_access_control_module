@@ -32,18 +32,24 @@ typedef struct {
 } ngx_http_access_control_rule_t;
 
 
-typedef struct {
+typedef struct ngx_http_access_control_loc_conf_s
+    ngx_http_access_control_loc_conf_t;
+
+struct ngx_http_access_control_loc_conf_s {
     ngx_array_t                *rules;
 #if (NGX_EXPR)
+    ngx_http_access_control_loc_conf_t  *parent;
     ngx_array_t                *status_code;
 #else
     ngx_uint_t                  status_code;
 #endif
     ngx_uint_t                  inherit_mode;
-} ngx_http_access_control_loc_conf_t;
+};
 
 
 static ngx_int_t ngx_http_access_control_handler(ngx_http_request_t *r);
+static ngx_int_t ngx_http_access_control_rules(ngx_http_request_t *r,
+    ngx_http_access_control_loc_conf_t *conf);
 static void *ngx_http_access_control_create_loc_conf(ngx_conf_t *cf);
 static char *ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     void *parent, void *child);
@@ -135,35 +141,71 @@ ngx_module_t ngx_http_access_control_module = {
 static ngx_int_t
 ngx_http_access_control_handler(ngx_http_request_t *r)
 {
-    ngx_http_access_control_loc_conf_t *alcf;
-    ngx_uint_t                          i;
-    ngx_http_access_control_rule_t     *rules;
-    ngx_str_t                           result;
-#if (NGX_EXPR)
-    ngx_int_t                           status;
-#endif
+    ngx_int_t                            rc;
+    ngx_http_access_control_loc_conf_t  *alcf;
 
     alcf = ngx_http_get_module_loc_conf(r, ngx_http_access_control_module);
 
-    if (!alcf->rules) {
-        return NGX_DECLINED;
+    rc = ngx_http_access_control_rules(r, alcf);
+
+    if (rc == NGX_ERROR) {
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
     }
 
-    rules = alcf->rules->elts;
+    if (rc == NGX_HTTP_FORBIDDEN) {
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "access denied by access_control rules");
+#if (NGX_EXPR)
+        return ngx_http_get_expr_num_value(r, alcf->status_code);
+#else
+        return alcf->status_code;
+#endif
+    }
 
-    for (i = 0; i < alcf->rules->nelts; i++) {
-        ngx_http_access_control_rule_t *rule = &rules[i];
+    /* A matching allow stops our rules, but not other access handlers. */
+    return NGX_DECLINED;
+}
+
+
+static ngx_int_t
+ngx_http_access_control_rules(ngx_http_request_t *r,
+    ngx_http_access_control_loc_conf_t *conf)
+{
+    ngx_uint_t                       i;
+    ngx_str_t                        result;
+    ngx_http_access_control_rule_t  *rules, *rule;
+#if (NGX_EXPR)
+    ngx_int_t                        rc;
+    ngx_uint_t                       active;
+
+    if (conf->parent
+        && conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_BEFORE)
+    {
+        rc = ngx_http_access_control_rules(r, conf->parent);
+        if (rc != NGX_DECLINED) {
+            return rc;
+        }
+    }
+
+    active = 0;
+#endif
+
+    rules = conf->rules ? conf->rules->elts : NULL;
+
+    for (i = 0; conf->rules && i < conf->rules->nelts; i++) {
+        rule = &rules[i];
 
 #if (NGX_EXPR)
-        if (ngx_http_expr_get_result(r, rule->expr_id) != NGX_EXPR_WHEN_HIT)
-        {
+        if (ngx_http_expr_get_result(r, rule->expr_id) != NGX_EXPR_WHEN_HIT) {
             continue;
         }
+
+        active = 1;
 #endif
 
         if (rule->condition != NULL) {
             if (ngx_http_complex_value(r, rule->condition, &result) != NGX_OK) {
-                return NGX_HTTP_INTERNAL_SERVER_ERROR;
+                return NGX_ERROR;
             }
 
             if (result.len == 0 || (result.len == 1 && result.data[0] == '0')) {
@@ -171,21 +213,19 @@ ngx_http_access_control_handler(ngx_http_request_t *r)
             }
         }
 
-        if (rule->action == NGX_HTTP_ACCESS_CONTROL_RULE_DENY) {
-            ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
-                          "access denied by access_control rules");
+        return rule->action == NGX_HTTP_ACCESS_CONTROL_RULE_DENY
+               ? NGX_HTTP_FORBIDDEN : NGX_OK;
+    }
 
 #if (NGX_EXPR)
-            status = ngx_http_get_expr_num_value(r, alcf->status_code);
-            return (ngx_uint_t) status;
-#else
-            return alcf->status_code;
-#endif
-
-        } else { /* NGX_HTTP_ACCESS_CONTROL_RULE_ALLOW */
-            return NGX_DECLINED;
-        }
+    if (conf->parent
+        && (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_AFTER
+            || (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_ON
+                && !active)))
+    {
+        return ngx_http_access_control_rules(r, conf->parent);
     }
+#endif
 
     return NGX_DECLINED;
 }
@@ -217,14 +257,18 @@ ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     ngx_http_access_control_loc_conf_t *prev = parent;
     ngx_http_access_control_loc_conf_t *conf = child;
 
+#if !(NGX_EXPR)
     ngx_array_t                        *new_rules;
     ngx_http_access_control_rule_t     *pr, *cr, *nr;
     ngx_uint_t                          i;
+#endif
 
     ngx_conf_merge_uint_value(conf->inherit_mode, prev->inherit_mode,
                               NGX_HTTP_ACCESS_CONTROL_INHERIT_ON);
 
 #if (NGX_EXPR)
+    conf->parent = prev;
+
     if (ngx_conf_merge_expr_num_value(cf, &conf->status_code,
                                       prev->status_code,
                                       NGX_HTTP_FORBIDDEN)
@@ -235,7 +279,6 @@ ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
 #else
     ngx_conf_merge_uint_value(conf->status_code, prev->status_code,
                               NGX_HTTP_FORBIDDEN);
-#endif
 
     if (conf->inherit_mode == NGX_HTTP_ACCESS_CONTROL_INHERIT_OFF
         || prev->rules == NULL)
@@ -296,10 +339,10 @@ ngx_http_access_control_merge_loc_conf(ngx_conf_t *cf,
     }
 
     conf->rules = new_rules;
+#endif
 
     return NGX_CONF_OK;
 }
-
 
 static char *
 ngx_http_access_control(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
