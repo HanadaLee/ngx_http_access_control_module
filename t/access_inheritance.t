@@ -52,8 +52,8 @@ http {
             alias %%TESTDIR%%/ok;
         }
         location = /status {
-            access_deny_status 401;
             when selected { access_deny_status 418; }
+            access_deny_status 401;
             alias %%TESTDIR%%/ok;
         }
         location /parent/ {
@@ -74,7 +74,7 @@ http {
             }
         }
         location = /other-access {
-            satisfy any;
+            satisfy all;
             access allow;
             deny all;
             alias %%TESTDIR%%/ok;
@@ -121,7 +121,7 @@ status('/status?mode=yes', 418, 'inherited deny uses current conditional status'
 status('/parent/child', 200, 'parent off is respected during before traversal');
 status('/parent/child?mode=yes', 403, 'parent active deny wins before child');
 status('/allow/before', 200, 'parent allow is not confused with no decision');
-status('/other-access', 403, 'allow does not bypass other access handlers');
+status('/other-access', 403, 'satisfy all still requires the native access check');
 status('/methods', 200, 'GET uses outer rules');
 like(http('POST /methods HTTP/1.0' . "\r\nContent-Length: 0\r\n\r\n"),
     qr/^HTTP\/1\.[01] 403 /, 'limit_except has its own rules');
